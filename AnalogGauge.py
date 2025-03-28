@@ -9,9 +9,7 @@ class AnalogGauge:
     """
 
     def __init__(self,
-                 window_name: Optional[str] = None,
-                 width: int = 600,
-                 height: int = 400,
+                 image: np.ndarray,
                  max_value: int = 200,
                  min_value: int = 0,
                  minor_marks: int = 20,
@@ -22,9 +20,7 @@ class AnalogGauge:
         Initializes the AnalogGauge instance.
 
         Parameters:
-            window_name (Optional[str]): Name of the display window.
-            width (int): Width of the gauge image.
-            height (int): Height of the gauge image.
+            image (np.ndarray): image (3-channel uint8 array).
             max_value (int): Maximum value to be displayed.
             min_value (int): Minimum value to be displayed.
             minor_marks (int): Interval for minor marks.
@@ -32,9 +28,12 @@ class AnalogGauge:
             arch (int): Angular arch of the gauge.
             phase (int): Initial angular offset.
         """
-        self.window_name = window_name
-        self.width = width
-        self.height = height
+        if len(image.shape) != 3 or image.shape[2] != 3:
+            raise ValueError("The image must be a 3-channel uint8 array.")
+        # Store the base image for redrawing
+        self.base_image = image.copy()
+        self.height, self.width, _ = image.shape
+
         self.max_value = max_value
         self.min_value = min_value
         self.units = units
@@ -43,9 +42,6 @@ class AnalogGauge:
 
         # Current gauge value (stored privately)
         self._position: int = 0
-
-        # Base image on which static elements are drawn
-        self.base_image: np.ndarray = np.zeros((height, width, 3), dtype=np.uint8)
 
         # Geometric configuration of the gauge
         self.start_angle: int = phase
@@ -56,23 +52,19 @@ class AnalogGauge:
         self.factor2: float = self.range / arch
 
         # Center and radius of the gauge
-        self.center: Tuple[int, int] = (width // 2, height // 2)
-        self.radius: int = min(width, height) // 2 - 60
+        self.center: Tuple[int, int] = (self.width // 2, self.height // 2)
+        self.radius: int = min(self.width, self.height) // 2 - 60
 
         # Color configuration (BGR format)
-        self.bg_color: Tuple[int, int, int] = (30, 30, 30)
         self.scale_color: Tuple[int, int, int] = (200, 200, 200)
         self.needle_color: Tuple[int, int, int] = (0, 0, 255)
         self.text_color: Tuple[int, int, int] = (255, 255, 255)
 
         self._init_base_image()
 
-        if self.window_name:
-            cv2.namedWindow(self.window_name, cv2.WINDOW_AUTOSIZE)
-
     def _init_base_image(self) -> None:
-        """Initializes the base image with background and static elements."""
-        self.base_image[:] = self.bg_color
+        """Initializes the base image with static elements."""
+        # Use the provided image as the background without overwriting it
         self._draw_gauge_arc()
         self._draw_marks_and_labels()
         self._draw_units_label()
@@ -124,13 +116,11 @@ class AnalogGauge:
                     self.text_color,
                     2,
                     cv2.LINE_AA)
-        
 
     @property
     def needle_angle(self) -> int:
         """Returns the current angle of the needle."""
         return self._position - self.start_angle 
-    
     
     @needle_angle.setter
     def needle_angle(self, value: int) -> None:
@@ -140,11 +130,11 @@ class AnalogGauge:
         Parameters:
             value (int): New angle for the needle.
         """
-        self.physvalue = int(value*self.factor2) + self.min_value
+        self.physvalue = int(value * self.factor2) + self.min_value
         self._position = value + self.start_angle
 
     @property
-    def needle_position_range(self, value: int) -> int:
+    def needle_position_range(self) -> int:
         """Returns the current position of the needle."""
         return self.physvalue
     
@@ -157,8 +147,7 @@ class AnalogGauge:
             value (int): New position for the needle.
         """
         self.physvalue = value
-        self._position = self.start_angle + value*self.factor
-    
+        self._position = self.start_angle + value * self.factor
 
     def update_display(self) -> np.ndarray:
         """
@@ -195,24 +184,28 @@ class AnalogGauge:
         return display_image
 
 if __name__ == '__main__':
+    # Create a background image
+    image = np.zeros((400, 600, 3), dtype=np.uint8)
+    image[:] = (30, 30, 30)
+
     # Create an instance of AnalogGauge
-    gauge = AnalogGauge(window_name="Analog Gauge Demo",
-                        width=600,
-                        height=400,
+    gauge = AnalogGauge(image=image,
                         max_value=200,
                         min_value=0,
                         minor_marks=20,
                         units="km/h",
                         arch=180,
-                        phase=0)
+                        phase=180)
 
+    image = gauge.update_display()
     value = 0
     increasing = True
 
     while True:
         # Update the gauge value and get the updated image
-        gauge_image = gauge.set_value(value)
-        cv2.imshow("Analog Gauge Demo", gauge_image)
+        gauge.needle_position_range = value
+        image = gauge.update_display()
+        cv2.imshow("Analog Gauge Demo", image)
         
         # Exit if 'q' is pressed
         if cv2.waitKey(50) & 0xFF == ord('q'):
