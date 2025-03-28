@@ -20,7 +20,7 @@ class AnalogGauge:
         Initializes the AnalogGauge instance.
 
         Parameters:
-            image (np.ndarray): Background image (3-channel uint8 array).
+            image (np.ndarray): image (3-channel uint8 array).
             max_value (int): Maximum value to be displayed.
             min_value (int): Minimum value to be displayed.
             minor_marks (int): Interval for minor marks.
@@ -30,7 +30,7 @@ class AnalogGauge:
         """
         if len(image.shape) != 3 or image.shape[2] != 3:
             raise ValueError("The image must be a 3-channel uint8 array.")
-
+        # Store the base image for redrawing
         self.base_image = image.copy()
         self.height, self.width, _ = image.shape
 
@@ -185,11 +185,11 @@ class AnalogGauge:
 
 if __name__ == '__main__':
     # Create a background image
-    background_image = np.zeros((400, 600, 3), dtype=np.uint8)
-    background_image[:] = (30, 30, 30)
+    image = np.zeros((400, 600, 3), dtype=np.uint8)
+    image[:] = (30, 30, 30)
 
     # Create an instance of AnalogGauge
-    gauge = AnalogGauge(image=background_image,
+    gauge = AnalogGauge(image=image,
                         max_value=200,
                         min_value=0,
                         minor_marks=20,
@@ -197,14 +197,15 @@ if __name__ == '__main__':
                         arch=180,
                         phase=180)
 
+    image = gauge.update_display()
     value = 0
     increasing = True
 
     while True:
         # Update the gauge value and get the updated image
         gauge.needle_position_range = value
-        gauge_image = gauge.update_display()
-        cv2.imshow("Analog Gauge Demo", gauge_image)
+        image = gauge.update_display()
+        cv2.imshow("Analog Gauge Demo", image)
         
         # Exit if 'q' is pressed
         if cv2.waitKey(50) & 0xFF == ord('q'):
