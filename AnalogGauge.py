@@ -31,7 +31,7 @@ class AnalogGauge:
         if len(image.shape) != 3 or image.shape[2] != 3:
             raise ValueError("The image must be a 3-channel uint8 array.")
         # Store the base image for redrawing
-        self.base_image = image.copy()
+        self.base_image = image
         self.height, self.width, _ = image.shape
 
         self.max_value = max_value
@@ -61,6 +61,7 @@ class AnalogGauge:
         self.text_color: Tuple[int, int, int] = (255, 255, 255)
 
         self._init_base_image()
+        self.background = self.base_image.copy()
 
     def _init_base_image(self) -> None:
         """Initializes the base image with static elements."""
@@ -133,19 +134,23 @@ class AnalogGauge:
         self.physvalue = int(value * self.factor2) + self.min_value
         self._position = value + self.start_angle
 
-    @property
-    def needle_position_range(self) -> int:
+    
+    def GetValue(self) -> int:
         """Returns the current position of the needle."""
         return self.physvalue
     
-    @needle_position_range.setter
-    def needle_position_range(self, value: int) -> None:
+    def SetValue(self, value: int) -> None:
         """
         Sets the position of the needle ensuring it stays within the defined limits.
         
         Parameters:
             value (int): New position for the needle.
         """
+        if value < self.min_value:
+            value = self.min_value
+        elif value > self.max_value:
+            value = self.max_value
+        # Update the needle position and the physical value
         self.physvalue = value
         self._position = self.start_angle + value * self.factor
 
@@ -156,7 +161,7 @@ class AnalogGauge:
         Returns:
             np.ndarray: Updated gauge image.
         """
-        display_image = self.base_image.copy()
+        display_image = self.background.copy()
 
         # Calculate the needle angle
         radian = math.radians(self._position)
@@ -181,31 +186,39 @@ class AnalogGauge:
                     2,
                     cv2.LINE_AA)
 
-        return display_image
+        self.base_image[:] = display_image[:]      
 
 if __name__ == '__main__':
     # Create a background image
-    image = np.zeros((400, 600, 3), dtype=np.uint8)
-    image[:] = (30, 30, 30)
+    imagename = 'GaugeDemo'
+    imagecontainer = np.zeros((400, 600, 3), dtype=np.uint8)
+    imagecontainer[:] = (30, 30, 30)
+    MaxValue = 200
+    MinValue = 0
+
+    value = 0
 
     # Create an instance of AnalogGauge
-    gauge = AnalogGauge(image=image,
-                        max_value=200,
-                        min_value=0,
+    GaugeDemo = AnalogGauge(image=imagecontainer,
+                        max_value=MaxValue,
+                        min_value=MinValue,
                         minor_marks=20,
                         units="km/h",
                         arch=180,
                         phase=180)
-
-    image = gauge.update_display()
-    value = 0
+    # Create a window to display the gauge
+    cv2.namedWindow(imagename)
+    # Set the initial value of the gauge
+    GaugeDemo.SetValue(value)
+    # update the image container (imagename)
+    GaugeDemo.update_display()
+    # Draw the gauge on the image container
+    cv2.imshow(imagename, imagecontainer)
+    cv2.waitKey(100)
+    
     increasing = True
-
     while True:
         # Update the gauge value and get the updated image
-        gauge.needle_position_range = value
-        image = gauge.update_display()
-        cv2.imshow("Analog Gauge Demo", image)
         
         # Exit if 'q' is pressed
         if cv2.waitKey(50) & 0xFF == ord('q'):
@@ -214,11 +227,16 @@ if __name__ == '__main__':
         # Increment or decrement the gauge value
         if increasing:
             value += 1
-            if value >= gauge.max_value:
+            if value >= MaxValue:
                 increasing = False
         else:
             value -= 1
-            if value <= gauge.min_value:
+            if value <= MinValue:
                 increasing = True
+        #redraw the image
+        GaugeDemo.SetValue(value)
+        GaugeDemo.update_display()
+        cv2.imshow(imagename, imagecontainer)
+        cv2.waitKey(100)
 
     cv2.destroyAllWindows()
